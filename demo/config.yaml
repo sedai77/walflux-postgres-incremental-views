@@ -1,0 +1,32 @@
+# WalFlux demo configuration: two views over public.orders.
+# The DSN targets the compose `postgres` service; WALFLUX_DSN overrides it.
+
+database:
+  dsn: "postgresql://walflux:walflux@postgres:5432/demo"
+
+slot: walflux
+publication: walflux
+
+batch:
+  max_ms: 200
+  max_txns: 500
+
+views:
+  # Grouped view: one row per order status.
+  - name: orders_by_status
+    source: public.orders
+    group_by: [status]
+    aggregates:
+      - { fn: count, as: order_count }                  # COUNT(*)
+      - { fn: count, column: coupon, as: with_coupon }  # COUNT(coupon), skips NULLs
+      - { fn: sum, column: total, as: revenue }
+      - { fn: avg, column: total, as: avg_order_value }
+
+  # Global view: a single always-present row aggregating the whole table.
+  - name: orders_global
+    source: public.orders
+    group_by: []
+    aggregates:
+      - { fn: count, as: order_count }
+      - { fn: sum, column: total, as: revenue }
+      - { fn: avg, column: total, as: avg_order_value }

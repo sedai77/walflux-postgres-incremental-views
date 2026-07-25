@@ -1,0 +1,67 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "walflux"
+version = "0.1.0"
+description = "Millisecond-fresh materialized views for Postgres, maintained incrementally from logical replication. No extensions, no triggers, no second database."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+authors = [{ name = "WalFlux contributors" }]
+keywords = [
+  "postgres",
+  "postgresql",
+  "materialized-view",
+  "incremental-view-maintenance",
+  "ivm",
+  "cdc",
+  "change-data-capture",
+  "logical-replication",
+  "pgoutput",
+  "streaming",
+  "real-time-aggregation",
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Database",
+]
+dependencies = [
+  "psycopg2-binary>=2.9",
+  "PyYAML>=6.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/nexzensoftware-ship-it/walflux"
+Documentation = "https://github.com/nexzensoftware-ship-it/walflux#readme"
+Issues = "https://github.com/nexzensoftware-ship-it/walflux/issues"
+
+[project.scripts]
+walflux = "walflux.cli:main"
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["walflux"]
+
+[tool.pytest.ini_options]
+markers = [
+  "integration: requires a running Postgres 15+ with wal_level=logical (set WALFLUX_TEST_DSN)",
+]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]

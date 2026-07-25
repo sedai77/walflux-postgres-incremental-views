@@ -1,0 +1,48 @@
+# WalFlux demo stack. Drive it via the repo-root Makefile (`make demo`,
+# `make kill9`) or directly: docker compose -f demo/docker-compose.yml up -d
+name: walflux-demo
+
+services:
+  postgres:
+    image: postgres:16
+    # Logical replication on, with slot/sender headroom for demo re-runs.
+    command: postgres -c wal_level=logical -c max_replication_slots=8 -c max_wal_senders=8
+    environment:
+      POSTGRES_USER: walflux
+      POSTGRES_PASSWORD: walflux
+      POSTGRES_DB: demo
+    healthcheck:
+      # TCP check on purpose: the socket-only bootstrap server that runs
+      # during initdb must not count as "ready".
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U walflux -d demo"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+    volumes:
+      - ./seed.sql:/docker-entrypoint-initdb.d/seed.sql:ro
+
+  walflux:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: walflux-demo
+    command: walflux run -c /demo/config.yaml
+    # kill9.sh restarts the daemon explicitly; auto-restart would spoil the demo.
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  generator:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: walflux-demo
+    command: python /demo/generate.py
+    restart: "no"
+    environment:
+      WALFLUX_DSN: postgresql://walflux:walflux@postgres:5432/demo
+    depends_on:
+      postgres:
+        condition: service_healthy

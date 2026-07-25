@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    name: lint (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - name: ruff check
+        run: uv run --extra dev ruff check .
+
+  unit:
+    name: unit (py ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: pytest (unit)
+        run: uv run --extra dev pytest -m "not integration"
+
+  integration:
+    name: integration (postgres 16, wal_level=logical)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      # Service containers cannot override the image command, and we need
+      # wal_level=logical — so start Postgres with a plain `docker run`.
+      - name: Start Postgres 16 with logical WAL
+        run: |
+          docker run -d --name pg \
+            -e POSTGRES_PASSWORD=postgres \
+            -p 5432:5432 \
+            postgres:16 \
+            -c wal_level=logical \
+            -c max_replication_slots=8 \
+            -c max_wal_senders=8
+      - name: Wait for Postgres
+        run: |
+          for i in $(seq 1 30); do
+            if docker exec pg pg_isready -U postgres -h localhost; then
+              exit 0
+            fi
+            echo "waiting for postgres ($i)..."
+            sleep 1
+          done
+          echo "postgres never became ready" >&2
+          docker logs pg >&2
+          exit 1
+      - name: pytest (integration)
+        env:
+          WALFLUX_TEST_DSN: postgresql://postgres:postgres@localhost:5432/postgres
+        run: uv run --extra dev pytest -m integration -v
+      - name: Postgres logs (on failure)
+        if: failure()
+        run: docker logs pg
