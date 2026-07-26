@@ -40,9 +40,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/nexzensoftware-ship-it/walflux"
-Documentation = "https://github.com/nexzensoftware-ship-it/walflux#readme"
-Issues = "https://github.com/nexzensoftware-ship-it/walflux/issues"
+Homepage = "https://github.com/nexzensoftware-ship-it/walflux-postgres-incremental-views"
+Documentation = "https://github.com/nexzensoftware-ship-it/walflux-postgres-incremental-views#readme"
+Issues = "https://github.com/nexzensoftware-ship-it/walflux-postgres-incremental-views/issues"
 
 [project.scripts]
 walflux = "walflux.cli:main"
