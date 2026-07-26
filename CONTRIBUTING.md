@@ -11,7 +11,7 @@ WalFlux uses [uv](https://docs.astral.sh/uv/) for everything. There is nothing t
 "install" beyond cloning:
 
 ```bash
-git clone https://github.com/nexzensoftware-ship-it/walflux-postgres-incremental-views.git
+git clone https://github.com/sedai77/walflux-postgres-incremental-views.git
 cd walflux
 uv run --python 3.12 --extra dev pytest -m "not integration"
 ```

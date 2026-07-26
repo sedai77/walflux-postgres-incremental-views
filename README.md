@@ -2,7 +2,7 @@
 
 **Millisecond-fresh materialized views for Postgres — no extensions, no triggers, no second database.**
 
-[![CI](https://github.com/nexzensoftware-ship-it/walflux-postgres-incremental-views/actions/workflows/ci.yml/badge.svg)](https://github.com/nexzensoftware-ship-it/walflux-postgres-incremental-views/actions/workflows/ci.yml)
+[![CI](https://github.com/sedai77/walflux-postgres-incremental-views/actions/workflows/ci.yml/badge.svg)](https://github.com/sedai77/walflux-postgres-incremental-views/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/walflux)](https://pypi.org/project/walflux/)
 [![Python versions](https://img.shields.io/pypi/pyversions/walflux)](https://pypi.org/project/walflux/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -40,7 +40,7 @@ The [`demo/`](demo/) directory is a self-contained docker-compose setup: Postgre
 a workload generator doing ~30 mixed writes/sec, and WalFlux maintaining two views.
 
 ```bash
-git clone https://github.com/nexzensoftware-ship-it/walflux-postgres-incremental-views.git
+git clone https://github.com/sedai77/walflux-postgres-incremental-views.git
 cd walflux
 make demo        # bring it up and follow the daemon's flush log
 ```
