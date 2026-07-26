@@ -3,6 +3,8 @@
 **Millisecond-fresh materialized views for Postgres — no extensions, no triggers, no second database.**
 
 [![CI](https://github.com/sedai77/walflux-postgres-incremental-views/actions/workflows/ci.yml/badge.svg)](https://github.com/sedai77/walflux-postgres-incremental-views/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/walflux)](https://pypi.org/project/walflux/)
+[![Python versions](https://img.shields.io/pypi/pyversions/walflux)](https://pypi.org/project/walflux/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 WalFlux is a single daemon that keeps aggregate tables (`COUNT` / `SUM` / `AVG` with
@@ -94,14 +96,13 @@ their commit LSN against that checkpoint. No timing luck involved — see
 
 ### Install
 
-Until the first PyPI release lands, install from git:
-
 ```bash
-pip install git+https://github.com/sedai77/walflux-postgres-incremental-views.git
+pip install walflux
 ```
 
-From v0.1.0 onward: `pip install walflux`, or the container image
-`ghcr.io/sedai77/walflux-postgres-incremental-views`.
+Or run the container image `ghcr.io/sedai77/walflux-postgres-incremental-views`
+(see [deploy/](deploy/)), or install the latest development version from git:
+`pip install git+https://github.com/sedai77/walflux-postgres-incremental-views.git`.
 
 Write a config:
 
