@@ -9,17 +9,6 @@ called out explicitly in its entry.
 
 ## [Unreleased]
 
-### Added
-
-- `python -m walflux` as an alternative to the `walflux` script.
-- A PEP 561 `py.typed` marker: the package's type annotations are now visible
-  to mypy/pyright in downstream projects.
-
-### Changed
-
-- A wrong or unreachable DSN now fails as one tidy `cannot connect to database`
-  error line instead of a raw psycopg2 traceback.
-
 ## [0.1.0] - 2026-07-26
 
 Initial release.
@@ -34,7 +23,12 @@ Initial release.
   LSN. Proven across `kill -9` by the integration suite and `make kill9`.
 - Consistent snapshot backfill: `walflux setup` builds targets from the slot's
   exported snapshot, so backfill and stream meet with no gap and no overlap.
-- CLI: `walflux setup` / `run` / `status` / `teardown`.
+- CLI: `walflux setup` / `run` / `status` / `teardown`, plus
+  `python -m walflux` as an alternative entry point.
+- A PEP 561 `py.typed` marker: the package's type annotations are visible to
+  mypy/pyright in downstream projects.
+- A wrong or unreachable DSN fails as one tidy `cannot connect to database`
+  error line instead of a raw psycopg2 traceback.
 
 [Unreleased]: https://github.com/sedai77/walflux-postgres-incremental-views/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/sedai77/walflux-postgres-incremental-views/releases/tag/v0.1.0
