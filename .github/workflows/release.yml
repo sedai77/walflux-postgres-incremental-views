@@ -1,0 +1,114 @@
+# Release pipeline, triggered by pushing a v* tag (e.g. v0.1.0).
+#
+# No API tokens anywhere: PyPI uses Trusted Publishing (OIDC) and ghcr.io uses
+# the built-in GITHUB_TOKEN. One-time setup by the repo owner:
+#   1. pypi.org -> account -> Publishing -> add a (pending) trusted publisher:
+#      project "walflux", owner "sedai77",
+#      repository "walflux-postgres-incremental-views",
+#      workflow "release.yml", environment "pypi".
+#   2. GitHub repo Settings -> Environments -> create "pypi".
+# Then: bump __version__ in walflux/__init__.py, move the CHANGELOG.md
+# Unreleased entries into a dated section, and push the matching tag.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    name: build (wheel + sdist)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - name: Build
+        run: uv build
+      - name: Check metadata
+        run: uvx twine check dist/*
+      - name: Tag must match the package version
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          if [ ! -f "dist/walflux-${version}.tar.gz" ]; then
+            echo "tag ${GITHUB_REF_NAME} does not match the built version:" >&2
+            ls dist/ >&2
+            echo "bump __version__ in walflux/__init__.py before tagging" >&2
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  pypi:
+    name: publish to PyPI (trusted publishing)
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write # OIDC is the whole credential — no token, no secret
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  docker:
+    name: publish image (ghcr.io)
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: runtime
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+            ghcr.io/${{ github.repository }}:latest
+
+  github-release:
+    name: GitHub release
+    needs: [build, pypi]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: Extract this version's notes from CHANGELOG.md
+        run: |
+          awk -v heading="## [${GITHUB_REF_NAME#v}]" '
+            index($0, heading) == 1 { found = 1; next }
+            found && (/^## / || /^\[.*\]: /) { exit }
+            found { print }
+          ' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then
+            echo "no CHANGELOG.md section for ${GITHUB_REF_NAME#v}" >&2
+            echo "See CHANGELOG.md." > notes.md
+          fi
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --title "WalFlux ${GITHUB_REF_NAME#v}" \
+            --notes-file notes.md

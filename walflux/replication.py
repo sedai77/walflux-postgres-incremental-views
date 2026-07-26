@@ -10,6 +10,8 @@ from select import select
 import psycopg2
 from psycopg2.extras import LogicalReplicationConnection
 
+from walflux.common import WalfluxError
+
 logger = logging.getLogger("walflux.replication")
 
 #: select() timeout — lets the consumer flush idle batches and notice shutdown.
@@ -28,7 +30,12 @@ class ReplicationStream:
     """
 
     def __init__(self, dsn: str, slot: str, publication: str) -> None:
-        self._conn = psycopg2.connect(dsn, connection_factory=LogicalReplicationConnection)
+        try:
+            self._conn = psycopg2.connect(dsn, connection_factory=LogicalReplicationConnection)
+        except psycopg2.OperationalError as exc:
+            raise WalfluxError(
+                f"cannot connect to database: {' '.join(str(exc).split())}"
+            ) from exc
         self._cursor = self._conn.cursor()
         self._cursor.start_replication(
             slot_name=slot,

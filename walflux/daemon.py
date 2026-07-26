@@ -19,7 +19,14 @@ import psycopg2
 
 from walflux.aggregates import DeltaBatch, ViewSpec
 from walflux.checkpoint import read_checkpoint, write_checkpoint
-from walflux.common import ProtocolError, SchemaDriftError, SetupError, format_lsn, quote_ident
+from walflux.common import (
+    ProtocolError,
+    SchemaDriftError,
+    SetupError,
+    WalfluxError,
+    format_lsn,
+    quote_ident,
+)
 from walflux.protocol import (
     UNCHANGED_TOAST,
     Begin,
@@ -43,6 +50,14 @@ if TYPE_CHECKING:
     from walflux.config import Config
 
 logger = logging.getLogger("walflux.daemon")
+
+
+def _connect(dsn: str) -> Connection:
+    """Connect, turning an unreachable/misspelled DSN into a one-line WalfluxError."""
+    try:
+        return psycopg2.connect(dsn)
+    except psycopg2.OperationalError as exc:
+        raise WalfluxError(f"cannot connect to database: {' '.join(str(exc).split())}") from exc
 
 
 @dataclass(frozen=True)
@@ -81,7 +96,7 @@ class Daemon:
     def run(self) -> None:
         """Block until SIGINT/SIGTERM (graceful stop) or a fatal error (raises)."""
         _configure_logging()
-        conn = psycopg2.connect(self._config.dsn)
+        conn = _connect(self._config.dsn)
         stream: ReplicationStream | None = None
         try:
             try:
@@ -302,7 +317,7 @@ class Daemon:
 
 def status(config: Config) -> dict[str, object]:
     """Snapshot of slot / lag / checkpoint / per-view row counts for `walflux status`."""
-    conn = psycopg2.connect(config.dsn)
+    conn = _connect(config.dsn)
     conn.autocommit = True
     try:
         with conn.cursor() as cur:

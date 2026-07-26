@@ -6,6 +6,8 @@ COMPOSE := docker compose -f demo/docker-compose.yml
 
 # Build the demo stack, run setup, start the daemon + generator, follow daemon logs.
 demo:
+	@docker compose version >/dev/null 2>&1 || \
+		{ echo "error: the demo needs Docker with the compose v2 plugin" >&2; exit 1; }
 	$(COMPOSE) build
 	$(COMPOSE) up -d --wait postgres
 	$(COMPOSE) run --rm walflux walflux setup -c /demo/config.yaml --force

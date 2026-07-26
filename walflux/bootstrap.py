@@ -16,14 +16,23 @@ from psycopg2.extras import LogicalReplicationConnection
 
 from walflux.aggregates import ViewSpec, backfill_sql, target_ddl
 from walflux.checkpoint import ensure_checkpoint_table, write_checkpoint
-from walflux.common import SetupError, parse_lsn, quote_ident
+from walflux.common import SetupError, WalfluxError, parse_lsn, quote_ident
 
 if TYPE_CHECKING:
+    from psycopg2.extensions import connection as Connection
     from psycopg2.extensions import cursor as Cursor
 
     from walflux.config import Config
 
 logger = logging.getLogger("walflux.bootstrap")
+
+
+def _connect(dsn: str, **kwargs: object) -> Connection:
+    """Connect, turning an unreachable/misspelled DSN into a one-line WalfluxError."""
+    try:
+        return psycopg2.connect(dsn, **kwargs)
+    except psycopg2.OperationalError as exc:
+        raise WalfluxError(f"cannot connect to database: {' '.join(str(exc).split())}") from exc
 
 
 def setup(config: Config, *, force: bool = False) -> None:
@@ -32,7 +41,7 @@ def setup(config: Config, *, force: bool = False) -> None:
     Destructive to target tables by design (``DROP TABLE IF EXISTS``): targets
     are derived data and are rebuilt from the slot's exported snapshot.
     """
-    conn = psycopg2.connect(config.dsn)
+    conn = _connect(config.dsn)
     conn.autocommit = True
     repl_conn = None
     try:
@@ -55,7 +64,7 @@ def setup(config: Config, *, force: bool = False) -> None:
         # snapshot. The exported snapshot stays usable only while this
         # connection stays open and idle, so it must not be touched (or
         # closed) until the backfill transaction below has committed.
-        repl_conn = psycopg2.connect(config.dsn, connection_factory=LogicalReplicationConnection)
+        repl_conn = _connect(config.dsn, connection_factory=LogicalReplicationConnection)
         repl_cur = repl_conn.cursor()
         repl_cur.execute(
             f"CREATE_REPLICATION_SLOT {quote_ident(config.slot)} LOGICAL pgoutput EXPORT_SNAPSHOT"
@@ -110,7 +119,7 @@ def setup(config: Config, *, force: bool = False) -> None:
 
 def teardown(config: Config) -> None:
     """Drop the slot, the publication, and the whole ``walflux`` schema."""
-    conn = psycopg2.connect(config.dsn)
+    conn = _connect(config.dsn)
     conn.autocommit = True
     try:
         with conn.cursor() as cur:

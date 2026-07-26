@@ -3,8 +3,6 @@
 **Millisecond-fresh materialized views for Postgres — no extensions, no triggers, no second database.**
 
 [![CI](https://github.com/sedai77/walflux-postgres-incremental-views/actions/workflows/ci.yml/badge.svg)](https://github.com/sedai77/walflux-postgres-incremental-views/actions/workflows/ci.yml)
-[![PyPI](https://img.shields.io/pypi/v/walflux)](https://pypi.org/project/walflux/)
-[![Python versions](https://img.shields.io/pypi/pyversions/walflux)](https://pypi.org/project/walflux/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 WalFlux is a single daemon that keeps aggregate tables (`COUNT` / `SUM` / `AVG` with
@@ -38,10 +36,12 @@ nothing else to run.
 
 The [`demo/`](demo/) directory is a self-contained docker-compose setup: Postgres 16,
 a workload generator doing ~30 mixed writes/sec, and WalFlux maintaining two views.
+It needs Docker with the compose v2 plugin and `make` — no Docker? Jump straight to
+[Real setup](#real-setup).
 
 ```bash
 git clone https://github.com/sedai77/walflux-postgres-incremental-views.git
-cd walflux
+cd walflux-postgres-incremental-views
 make demo        # bring it up and follow the daemon's flush log
 ```
 
@@ -74,9 +74,34 @@ their commit LSN against that checkpoint. No timing luck involved — see
 
 ## Real setup
 
+### Requirements
+
+- **Any Postgres 15+ with `wal_level=logical`.** Self-hosted: set it in
+  `postgresql.conf` and restart. RDS / Aurora: set `rds.logical_replication=1`
+  in the parameter group and reboot. Cloud SQL: set the
+  `cloudsql.logical_decoding=on` flag. Supabase: already on. Neon: enable
+  logical replication in project settings.
+- **One free replication slot** under `max_replication_slots` (default 10).
+- **A role with enough privilege** — three things, matching exactly what
+  `walflux setup` runs:
+  - the `REPLICATION` attribute, to create and read the slot (RDS instead:
+    `GRANT rds_replication TO your_role`; Supabase: use the `postgres` role);
+  - `CREATE` on the database — setup creates the `walflux` schema and a
+    publication;
+  - ownership of each source table — setup runs
+    `ALTER TABLE ... REPLICA IDENTITY FULL` and adds the table to the
+    publication.
+
+### Install
+
+Until the first PyPI release lands, install from git:
+
 ```bash
-pip install walflux
+pip install git+https://github.com/sedai77/walflux-postgres-incremental-views.git
 ```
+
+From v0.1.0 onward: `pip install walflux`, or the container image
+`ghcr.io/sedai77/walflux-postgres-incremental-views`.
 
 Write a config:
 
@@ -113,6 +138,21 @@ Run `walflux run` under a supervisor (systemd `Restart=on-failure`, or compose
 `restart: unless-stopped`) — restarts are the retry story, and they are safe by
 construction. `walflux teardown -c walflux.yaml --yes` removes the slot, publication,
 and the `walflux` schema when you're done.
+
+### Production
+
+[`deploy/`](deploy/) has a ready-to-edit systemd unit and a production compose
+file, and [docs/OPERATIONS.md](docs/OPERATIONS.md) is the operator page:
+monitoring SQL with alert thresholds for the slot, upgrades, decommissioning.
+From v0.1.0, the released image makes the container path one command:
+
+```bash
+docker run -d --restart unless-stopped \
+  -v ./walflux.yaml:/etc/walflux.yaml:ro \
+  -e WALFLUX_DSN=postgresql://... \
+  ghcr.io/sedai77/walflux-postgres-incremental-views:latest \
+  walflux run -c /etc/walflux.yaml
+```
 
 ## How it works
 
@@ -184,7 +224,8 @@ it. WalFlux sits in the gap: managed Postgres, aggregate views, one small proces
 Correctness-wise, no: it resumes from its checkpoint. Operationally, the replication
 slot retains WAL while nobody consumes it, so disk usage grows. Set
 `max_slot_wal_keep_size` to bound it (if exceeded, the slot is invalidated and you
-re-run `walflux setup --force`), and monitor lag with `walflux status`. Details in
+re-run `walflux setup --force`), and monitor lag with `walflux status`. Copy-paste
+alert queries live in [docs/OPERATIONS.md](docs/OPERATIONS.md); the reasoning is in
 [DESIGN.md §9](DESIGN.md#9-slot-bloat-the-operational-contract).
 
 **Can the target tables live in a different database?**
@@ -224,8 +265,10 @@ volume (not commit latency in most workloads).
 ## Documentation
 
 - [DESIGN.md](DESIGN.md) — the crash-by-crash correctness argument.
+- [docs/OPERATIONS.md](docs/OPERATIONS.md) — monitoring, alerting, upgrades, decommissioning.
 - [docs/SPEC.md](docs/SPEC.md) — the internal architecture contract.
 - [CONTRIBUTING.md](CONTRIBUTING.md) — dev setup, tests, style.
+- [CHANGELOG.md](CHANGELOG.md) — release history.
 - [demo/](demo/) — the compose demo and the `kill -9` proof.
 
 ## License

@@ -1,0 +1,27 @@
+name: Feature request
+description: Something WalFlux should do.
+labels: [enhancement]
+body:
+  - type: checkboxes
+    id: roadmap
+    attributes:
+      label: Roadmap check
+      options:
+        - label: >
+            I checked the
+            [roadmap](https://github.com/sedai77/walflux-postgres-incremental-views#roadmap)
+            — joins, min/max, snapshot re-sync, and a Prometheus metrics
+            endpoint are already planned.
+          required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you are trying to do — not just the feature you want.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Config shape, CLI flags, semantics — whatever you have.

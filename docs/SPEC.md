@@ -24,7 +24,9 @@ protocol client), `PyYAML`. Nothing else. Use stdlib `logging`, `argparse`, `dat
 
 ```
 walflux/
-  __init__.py      version only (exists)
+  __init__.py      version only (exists; single-sourced via hatch)
+  __main__.py      `python -m walflux` shim over cli.main       [Module C]
+  py.typed         PEP 561 marker (empty)
   protocol.py      pgoutput binary message decoder            [Module A]
   aggregates.py    delta accumulation + SQL generation        [Module B]
   config.py        YAML config loading/validation             [Module C]
@@ -482,7 +484,9 @@ global view's single row. This test IS the kill -9 proof.
   `walflux` (build from repo-root `Dockerfile`, runs `walflux run -c /demo/config.yaml`,
   `restart: "no"` — the kill demo restarts it explicitly); `generator` (same image,
   runs `python /demo/generate.py`). Compose project name `walflux-demo`.
-- `Dockerfile` (repo root): `python:3.12-slim`, `pip install .`, copy `demo/`.
+- `Dockerfile` (repo root): `python:3.12-slim`, two stages — `runtime` (package
+  only; published to ghcr.io by the release workflow) and `demo` (adds `demo/`;
+  the compose build target).
 - `demo/seed.sql`: `orders(id bigserial PK, status text NOT NULL, total numeric(10,2),
   coupon text, created_at timestamptz DEFAULT now())` + ~50 seed rows across statuses.
 - `demo/config.yaml`: the two views from the config example, DSN pointing at the
@@ -509,8 +513,9 @@ global view's single row. This test IS the kill -9 proof.
 README requirements (discoverability is a feature; write for a skimming reader):
 
 - H1 `WalFlux` + one-line tagline: millisecond-fresh materialized views for Postgres —
-  no extensions, no triggers, no second database. Badges: CI, PyPI (will 404 until
-  first publish — use shields.io anyway), Python versions, MIT.
+  no extensions, no triggers, no second database. Badges: CI, MIT (the shields.io
+  PyPI + Python-versions badges return once the first release is actually on PyPI —
+  broken badges are worse than none).
 - "Why": `REFRESH MATERIALIZED VIEW` recomputes everything and locks; trigger-based
   counters add write-path latency and deadlock risk; stream processors are a second
   system to operate. WalFlux is one daemon + your existing Postgres. Works where you

@@ -12,7 +12,7 @@ WalFlux uses [uv](https://docs.astral.sh/uv/) for everything. There is nothing t
 
 ```bash
 git clone https://github.com/sedai77/walflux-postgres-incremental-views.git
-cd walflux
+cd walflux-postgres-incremental-views
 uv run --python 3.12 --extra dev pytest -m "not integration"
 ```
 

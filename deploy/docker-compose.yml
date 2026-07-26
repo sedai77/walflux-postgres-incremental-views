@@ -1,0 +1,19 @@
+# Production compose service for the WalFlux daemon.
+# Put your walflux.yaml next to this file (it needs no database.dsn — the
+# WALFLUX_DSN environment variable overrides it), then:
+#   WALFLUX_DSN=postgresql://... docker compose -f deploy/docker-compose.yml up -d
+name: walflux
+
+services:
+  walflux:
+    # The image is published from v0.1.0 onward; until then (or to run local
+    # changes) replace `image:` with:
+    #   build: { context: .., target: runtime }
+    image: ghcr.io/sedai77/walflux-postgres-incremental-views:latest
+    command: walflux run -c /etc/walflux.yaml
+    # Restarts are the retry story and are safe by construction (see DESIGN.md).
+    restart: unless-stopped
+    environment:
+      WALFLUX_DSN: ${WALFLUX_DSN:?set WALFLUX_DSN to your database DSN}
+    volumes:
+      - ./walflux.yaml:/etc/walflux.yaml:ro

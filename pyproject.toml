@@ -4,10 +4,11 @@ build-backend = "hatchling.build"
 
 [project]
 name = "walflux"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Millisecond-fresh materialized views for Postgres, maintained incrementally from logical replication. No extensions, no triggers, no second database."
 readme = "README.md"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
 authors = [{ name = "WalFlux contributors" }]
 keywords = [
@@ -26,13 +27,13 @@ keywords = [
 classifiers = [
   "Development Status :: 4 - Beta",
   "Intended Audience :: Developers",
-  "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
   "Topic :: Database",
+  "Typing :: Typed",
 ]
 dependencies = [
   "psycopg2-binary>=2.9",
@@ -41,7 +42,9 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/sedai77/walflux-postgres-incremental-views"
+Repository = "https://github.com/sedai77/walflux-postgres-incremental-views"
 Documentation = "https://github.com/sedai77/walflux-postgres-incremental-views#readme"
+Changelog = "https://github.com/sedai77/walflux-postgres-incremental-views/blob/main/CHANGELOG.md"
 Issues = "https://github.com/sedai77/walflux-postgres-incremental-views/issues"
 
 [project.scripts]
@@ -49,6 +52,10 @@ walflux = "walflux.cli:main"
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff>=0.6"]
+
+# The single source of the version: bump __version__ in walflux/__init__.py.
+[tool.hatch.version]
+path = "walflux/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["walflux"]

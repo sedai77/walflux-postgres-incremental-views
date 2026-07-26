@@ -1,0 +1,60 @@
+name: Bug report
+description: Something WalFlux did wrong — wrong aggregates, a crash, a stuck daemon.
+labels: [bug]
+body:
+  - type: input
+    id: walflux-version
+    attributes:
+      label: WalFlux version
+      description: Output of `walflux --version` (plus the commit, if installed from git).
+      placeholder: walflux 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: postgres-version
+    attributes:
+      label: Postgres version
+      description: Output of `SELECT version();`.
+      placeholder: PostgreSQL 16.4
+    validations:
+      required: true
+  - type: dropdown
+    id: hosting
+    attributes:
+      label: Where does Postgres run?
+      options:
+        - Self-hosted
+        - Amazon RDS / Aurora
+        - Google Cloud SQL
+        - Supabase
+        - Neon
+        - Other managed service
+    validations:
+      required: true
+  - type: textarea
+    id: views-config
+    attributes:
+      label: The config's `views:` section
+      description: Redact nothing else — the DSN is not needed.
+      render: yaml
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Daemon logs around the failure
+      description: >
+        The daemon logs every flush with its LSN, which usually pinpoints the
+        moment things went wrong — include the lines before and after.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected-vs-actual
+    attributes:
+      label: Expected vs actual
+      description: >
+        For wrong aggregates, the ideal evidence is the ground-truth `GROUP BY`
+        over the source table next to the `walflux.<view>` contents.
+    validations:
+      required: true

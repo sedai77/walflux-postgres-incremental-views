@@ -1,0 +1,26 @@
+# WalFlux systemd unit. Install:
+#   sudo useradd --system --no-create-home walflux
+#   sudo mkdir /etc/walflux
+#   sudo cp walflux.yaml /etc/walflux/walflux.yaml        # no dsn needed in it
+#   echo 'WALFLUX_DSN=postgresql://...' | sudo tee /etc/walflux/env
+#   sudo chown root:walflux /etc/walflux/env && sudo chmod 640 /etc/walflux/env
+#   sudo cp deploy/walflux.service /etc/systemd/system/
+#   sudo systemctl enable --now walflux
+[Unit]
+Description=WalFlux incremental materialized views daemon
+Documentation=https://github.com/sedai77/walflux-postgres-incremental-views
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=walflux
+# The DSN lives in the environment file, keeping credentials out of this unit
+# and out of the YAML config (WALFLUX_DSN overrides database.dsn).
+EnvironmentFile=/etc/walflux/env
+ExecStart=/usr/local/bin/walflux run -c /etc/walflux/walflux.yaml
+# Restarts are the retry story and are safe by construction (see DESIGN.md).
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

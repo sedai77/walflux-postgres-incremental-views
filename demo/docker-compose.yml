@@ -26,6 +26,7 @@ services:
     build:
       context: ..
       dockerfile: Dockerfile
+      target: demo
     image: walflux-demo
     command: walflux run -c /demo/config.yaml
     # kill9.sh restarts the daemon explicitly; auto-restart would spoil the demo.
@@ -38,6 +39,7 @@ services:
     build:
       context: ..
       dockerfile: Dockerfile
+      target: demo
     image: walflux-demo
     command: python /demo/generate.py
     restart: "no"
