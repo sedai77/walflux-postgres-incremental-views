@@ -39,6 +39,7 @@ nothing else to run.
 The [`demo/`](demo/) directory is a self-contained docker-compose setup: Postgres 16,
 a workload generator doing ~30 mixed writes/sec, and WalFlux maintaining two views.
 It needs Docker with the compose v2 plugin and `make` — no Docker? Jump straight to
+[a throwaway local Postgres](#no-docker-throwaway-local-postgres-in-2-minutes) or
 [Real setup](#real-setup).
 
 ```bash
@@ -47,7 +48,8 @@ cd walflux-postgres-incremental-views
 make demo        # bring it up and follow the daemon's flush log
 ```
 
-Then run the proof — kill the daemon with `SIGKILL` mid-write-storm, let writes pile
+`Ctrl-C` stops following the logs — the stack keeps running. Then run the proof —
+kill the daemon with `SIGKILL` mid-write-storm, let writes pile
 up while it's dead, restart it, and verify the targets against ground truth:
 
 ```bash
@@ -100,9 +102,74 @@ their commit LSN against that checkpoint. No timing luck involved — see
 pip install walflux
 ```
 
+> **No `pip` on your machine?** Common on stock macOS, whose built-in Python is
+> also too old (3.9). The painless path is [uv](https://docs.astral.sh/uv/):
+> `curl -LsSf https://astral.sh/uv/install.sh | sh`, reopen your terminal, then
+> `uv tool install walflux` — uv brings its own Python, and `walflux` is on
+> your PATH from then on.
+
 Or run the container image `ghcr.io/sedai77/walflux-postgres-incremental-views`
 (see [deploy/](deploy/)), or install the latest development version from git:
 `pip install git+https://github.com/sedai77/walflux-postgres-incremental-views.git`.
+
+### No Docker? Throwaway local Postgres in ~2 minutes
+
+No Docker and no Postgres you're willing to reconfigure?
+[`pgserver`](https://pypi.org/project/pgserver/) ships self-contained Postgres 16
+binaries inside a pip package — no root, nothing touches any system Postgres, and
+`rm -rf wfdata` erases it. From nothing to live aggregates:
+
+```bash
+uv venv --seed && source .venv/bin/activate   # any Python 3.10+ venv with pip works
+pip install walflux pgserver
+
+PGBIN="$(python -c "import pgserver, pathlib; print(pathlib.Path(pgserver.__file__).parent / 'pginstall' / 'bin')")"
+"$PGBIN/initdb" -D wfdata -A trust
+"$PGBIN/pg_ctl" -D wfdata -l wf.log -o "-c wal_level=logical -p 54330" start
+
+"$PGBIN/psql" -h localhost -p 54330 -d postgres -c \
+  "CREATE TABLE public.orders (id serial PRIMARY KEY, status text NOT NULL, coupon text, total numeric NOT NULL);"
+
+cat > walflux-local.yaml <<'EOF'
+database:
+  dsn: "postgresql://localhost:54330/postgres"
+views:
+  - name: orders_by_status
+    source: public.orders
+    group_by: [status]
+    aggregates:
+      - { fn: count, as: order_count }
+      - { fn: sum, column: total, as: revenue }
+EOF
+
+walflux setup -c walflux-local.yaml
+walflux run -c walflux-local.yaml    # foreground daemon — leave it running, open a second terminal
+```
+
+In the second terminal, write some rows and query the maintained aggregate:
+
+```bash
+source .venv/bin/activate
+PGBIN="$(python -c "import pgserver, pathlib; print(pathlib.Path(pgserver.__file__).parent / 'pginstall' / 'bin')")"
+"$PGBIN/psql" -h localhost -p 54330 -d postgres -c \
+  "INSERT INTO public.orders (status, coupon, total) VALUES ('paid','A',42.00),('paid',NULL,13.50),('cancelled',NULL,9.99);"
+"$PGBIN/psql" -h localhost -p 54330 -d postgres -c \
+  "SELECT status, order_count, revenue FROM walflux.orders_by_status ORDER BY status;"
+```
+
+```text
+  status   | order_count | revenue
+-----------+-------------+---------
+ cancelled |           1 |    9.99
+ paid      |           2 |   55.50
+(2 rows)
+```
+
+Done: `Ctrl-C` the daemon, `walflux teardown -c walflux-local.yaml --yes`, and
+`"$PGBIN/pg_ctl" -D wfdata stop` — then delete `wfdata`. Everything below works
+the same against this database as against a real one.
+
+### Configure
 
 Write a config:
 
@@ -118,17 +185,24 @@ views:
       - { fn: count, column: coupon, as: with_coupon }  # COUNT(coupon)
       - { fn: sum, column: total, as: revenue }
       - { fn: avg, column: total, as: avg_order_value }
+# Optional keys, shown with their defaults:
+# slot: walflux          # replication slot name
+# publication: walflux   # publication name
+# batch:
+#   max_ms: 200          # flush at least every 200 ms ...
+#   max_txns: 500        # ... or every 500 source transactions, whichever first
 ```
 
 Then:
 
 ```bash
 walflux setup -c walflux.yaml   # publication + slot + target tables + consistent backfill
-walflux run   -c walflux.yaml   # the daemon (foreground; logs to stderr)
+walflux run   -c walflux.yaml   # the daemon (foreground, blocks) — run the next commands in a second terminal
 walflux status -c walflux.yaml  # slot, lag, checkpoint, per-view row counts
 ```
 
-Query your aggregates as ordinary tables:
+Query your aggregates as ordinary tables (also from that second terminal — the
+daemon keeps running):
 
 ```sql
 SELECT status, order_count, revenue, avg_order_value

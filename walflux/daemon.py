@@ -125,6 +125,11 @@ class Daemon:
             )
             self._loop(conn, stream)
             logger.info("stopped cleanly at checkpoint %s", format_lsn(self._checkpoint_lsn))
+        except WalfluxError:
+            # User-fixable (SetupError, SchemaDriftError, ConfigError...): the
+            # CLI prints these as one tidy stderr line — a 25-line traceback
+            # logged first would bury the fix under the scary part.
+            raise
         except Exception:
             logger.exception("daemon exiting on error")
             raise

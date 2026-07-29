@@ -26,6 +26,14 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("walflux.bootstrap")
 
+# The three privileges setup actually exercises, spelled out once so every
+# permission failure points at the same README list instead of a raw traceback.
+_PRIVILEGE_HINT = (
+    "walflux setup needs three things: the REPLICATION attribute (RDS instead: "
+    "GRANT rds_replication TO your_role), CREATE on the database, and ownership "
+    "of each source table — see the README's Requirements section"
+)
+
 
 def _connect(dsn: str, **kwargs: object) -> Connection:
     """Connect, turning an unreachable/misspelled DSN into a one-line WalfluxError."""
@@ -46,6 +54,7 @@ def setup(config: Config, *, force: bool = False) -> None:
     repl_conn = None
     try:
         with conn.cursor() as cur:
+            _check_server_version(cur)
             _check_wal_level(cur)
             _ensure_sources(cur, config.views)
             ensure_checkpoint_table(cur)
@@ -64,7 +73,15 @@ def setup(config: Config, *, force: bool = False) -> None:
         # snapshot. The exported snapshot stays usable only while this
         # connection stays open and idle, so it must not be touched (or
         # closed) until the backfill transaction below has committed.
-        repl_conn = _connect(config.dsn, connection_factory=LogicalReplicationConnection)
+        try:
+            repl_conn = _connect(config.dsn, connection_factory=LogicalReplicationConnection)
+        except WalfluxError as exc:
+            # A role without the REPLICATION attribute is refused the
+            # walsender connection itself ("must be superuser or replication
+            # role..."); name the actual requirements instead.
+            if "replication" in str(exc).lower():
+                raise SetupError(f"{' '.join(str(exc).split())}; {_PRIVILEGE_HINT}") from exc
+            raise
         repl_cur = repl_conn.cursor()
         repl_cur.execute(
             f"CREATE_REPLICATION_SLOT {quote_ident(config.slot)} LOGICAL pgoutput EXPORT_SNAPSHOT"
@@ -87,6 +104,7 @@ def setup(config: Config, *, force: bool = False) -> None:
         # every transaction after it will be delivered by the stream and
         # applied exactly once by the daemon's skip rule
         # (Commit.end_lsn <= checkpoint => discard).
+        backfilled: list[tuple[str, int]] = []
         with conn.cursor() as cur:
             cur.execute("BEGIN ISOLATION LEVEL REPEATABLE READ")
             cur.execute("SET TRANSACTION SNAPSHOT %s", (snapshot_name,))
@@ -102,6 +120,7 @@ def setup(config: Config, *, force: bool = False) -> None:
                 for statement in target_ddl(view, group_types):
                     cur.execute(statement)
                 cur.execute(backfill_sql(view))
+                backfilled.append((view.name, cur.rowcount))
                 logger.info(
                     "backfilled walflux.%s from %s.%s",
                     view.name,
@@ -111,6 +130,17 @@ def setup(config: Config, *, force: bool = False) -> None:
             write_checkpoint(cur, config.slot, parse_lsn(consistent_point))
             cur.execute("COMMIT")
         logger.info("setup complete; checkpoint at %s", consistent_point)
+        # Narrate what was created (to stdout: this is the command's result,
+        # not a diagnostic) so first-time users see what happened and what
+        # comes next instead of a silent exit.
+        print(
+            f"setup complete: publication {config.publication!r}, slot {config.slot!r}, "
+            f"checkpoint {consistent_point}"
+        )
+        for name, count in backfilled:
+            print(f"  backfilled walflux.{name}: {count} row(s)")
+    except psycopg2.errors.InsufficientPrivilege as exc:
+        raise SetupError(f"{' '.join(str(exc).split())}; {_PRIVILEGE_HINT}") from exc
     finally:
         if repl_conn is not None:
             repl_conn.close()
@@ -137,6 +167,18 @@ def teardown(config: Config) -> None:
         logger.info("teardown complete: slot, publication, and walflux schema removed")
     finally:
         conn.close()
+
+
+def _check_server_version(cur: Cursor) -> None:
+    cur.execute("SHOW server_version_num")
+    version_num = int(cur.fetchone()[0])
+    if version_num < 150000:
+        cur.execute("SHOW server_version")
+        version = cur.fetchone()[0]
+        raise SetupError(
+            f"Postgres {version} detected; WalFlux needs 15+ "
+            "(target upserts use UNIQUE ... NULLS NOT DISTINCT)"
+        )
 
 
 def _check_wal_level(cur: Cursor) -> None:

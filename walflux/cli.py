@@ -22,6 +22,7 @@ def _cmd_setup(args: argparse.Namespace) -> int:
     from walflux import bootstrap
 
     bootstrap.setup(config, force=args.force)
+    print(f"next: walflux run -c {args.config}")
     return 0
 
 
@@ -66,9 +67,16 @@ def _print_status(info: dict[str, object]) -> None:
             return format_lsn(value)
         return str(value)
 
-    active = "active" if info.get("active") else "inactive"
+    if info.get("slot_exists") is False:
+        # A missing slot is not the same as an idle one: nothing will ever
+        # stream from it. Say so instead of reusing the "inactive" label.
+        slot_state = "absent — run `walflux setup`"
+    elif info.get("active"):
+        slot_state = "active"
+    else:
+        slot_state = "inactive"
     rows: list[tuple[str, str]] = [
-        ("slot", f"{info.get('slot', '-')} ({active})"),
+        ("slot", f"{info.get('slot', '-')} ({slot_state})"),
         ("restart_lsn", lsn(info.get("restart_lsn"))),
         ("confirmed_flush_lsn", lsn(info.get("confirmed_flush_lsn"))),
         ("current_lsn", lsn(info.get("current_lsn"))),
